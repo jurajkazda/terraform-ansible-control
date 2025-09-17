@@ -1,0 +1,60 @@
+#cloud-config
+
+package_update: false
+package_upgrade: false
+
+runcmd:
+  - |
+    CLOUD_INIT_LOG_FILE="/home/opc/cloud-init.log"
+    PYTHON_VERSIONS="python3.12 python3.11 python3.10 python3.9"
+    SELECTED_PYTHON=""
+
+    rm -f $CLOUD_INIT_LOG_FILE
+
+    for version in $PYTHON_VERSIONS; do
+      if dnf list available | grep -q "^${version}\."; then
+        SELECTED_PYTHON=$version
+        echo "Found available Python version: $SELECTED_PYTHON" | tee -a $CLOUD_INIT_LOG_FILE
+        break
+      fi
+    done
+
+    # If no specific version found, try to find any python3.x version
+    if [ -z "$SELECTED_PYTHON" ]; then
+      echo "No preferred versions found, searching for any Python 3.x version..." | tee -a $CLOUD_INIT_LOG_FILE
+      SELECTED_PYTHON=$(dnf list available | grep -E '^python3\.[0-9]+\.' | sort -V | tail -1 | awk '{print $1}' | cut -d'.' -f1-2)
+
+      if [ -n "$SELECTED_PYTHON" ]; then
+        echo "Found alternative Python version: $SELECTED_PYTHON" | tee -a $CLOUD_INIT_LOG_FILE
+      else
+        echo "ERROR: No Python 3.x versions found in repositories!" | tee -a $CLOUD_INIT_LOG_FILE
+        dnf list available | grep -E '^python3'
+        exit 1
+      fi
+    fi
+
+    echo "Installing Python version: $SELECTED_PYTHON" | tee -a $CLOUD_INIT_LOG_FILE
+    dnf install -y ${SELECTED_PYTHON} ${SELECTED_PYTHON}-pip ${SELECTED_PYTHON}-devel
+
+    # Get the installed Python version for reporting
+    INSTALLED_VERSION=$(${SELECTED_PYTHON} --version)
+    echo "Successfully installed Python version: $INSTALLED_VERSION" | tee -a $CLOUD_INIT_LOG_FILE
+
+    # Ensure pip is up to date
+    ${SELECTED_PYTHON} -m pip install --upgrade pip
+
+    # Install Ansible
+    ${SELECTED_PYTHON} -m pip install ansible
+
+    # Create convenient aliases for opc user and root
+    echo "alias python='${SELECTED_PYTHON}'" >> /home/opc/.bashrc
+    echo "alias python3='${SELECTED_PYTHON}'" >> /home/opc/.bashrc
+    echo "alias pip='${SELECTED_PYTHON} -m pip'" >> /home/opc/.bashrc
+    echo "alias python='${SELECTED_PYTHON}'" >> /root/.bashrc
+    echo "alias python3='${SELECTED_PYTHON}'" >> /root/.bashrc
+    echo "alias pip='${SELECTED_PYTHON} -m pip'" >> /root/.bashrc
+    chown opc:opc /home/opc/.bashrc
+
+    echo "Cloud-init Python setup completed successfully!" | tee -a $CLOUD_INIT_LOG_FILE
+
+final_message: "Cloud-init completed. Latest available Python and Ansible installed from Oracle Linux repositories."

@@ -15,7 +15,7 @@ resource "oci_core_instance" "ansible_control_node" {
 
   create_vnic_details {
     subnet_id        = var.subnet_ocid
-    display_name     = "primaryvnic"
+    display_name     = var.instance_name
     assign_public_ip = true
   }
 
@@ -26,7 +26,8 @@ resource "oci_core_instance" "ansible_control_node" {
 
   metadata = {
     ssh_authorized_keys = file("~/.ssh/oci_jkazda.pub")
-    user_data           = base64encode(file("${path.module}/user_data.tftpl"))
+    # user_data           = base64encode(file("${path.module}/user_data.tftpl"))
+    user_data           = base64encode(file("${path.module}/cloud-init.tftpl"))
   }
 }
 
